@@ -58,6 +58,31 @@
             color: #9ca3af;
             margin-top: 18px;
         }
+        .manual-select {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .manual-select p {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #6b7280;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 5px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .btn:hover {
+            background-color: #2563eb;
+        }
     </style>
 </head>
 <body>
@@ -65,34 +90,94 @@
         <img src="https://anrx87.neocities.org/%E5%B7%A5%E5%85%B7/c36c34744e2f4f65a5e9d3da05ba37df.gif" class="custom-gif" alt="加载中">
         <h2 class="title">正在准备访问</h2>
         <p id="status" class="status checking">正在检查可用链接...</p>
-        <p class="tip">若长时间无响应，请检查网络</p>
+        <p class="tip">若长时间无响应，请检查络</p>
+        
+        <div class="manual-select">
+            <p>或手动选择链接：</p>
+            <button id="link1" class="btn">链接 1</button>
+            <button id="link2" class="btn">链接 2</button>
+            <button id="link3" class="btn">链接 3</button>
+        </div>
     </div>
 
     <script>
+        // 目标链接
         const targetUrls = [
             "https://yc.hk11w.cn/m/index",
-            "https://yc.chenyutongxin.com/m/index",
+            "https://yc.chenyutongxin.com/m/index", 
             "https://yc.10099hk.cn/m/index"
         ];
-
         const cacheKey = "lastWorkingUrl";
-        const checkTimeout = 5000;
+        const checkTimeout = 5000; // 检测超时时间（5秒）
         const statusEl = document.getElementById("status");
         const gifEl = document.querySelector(".custom-gif");
 
-        window.onload = function () {
+        // 手动选择按钮事件
+        document.getElementById("link1").addEventListener("click", () => {
+            window.location.href = targetUrls[0];
+        });
+        document.getElementById("link2").addEventListener("click", () => {
+            window.location.href = targetUrls[1];
+        });
+        document.getElementById("link3").addEventListener("click", () => {
+            window.location.href = targetUrls[2];
+        });
+
+        window.onload = function() {
             const cachedUrl = localStorage.getItem(cacheKey);
             if (cachedUrl) {
-                window.location.href = cachedUrl;
+                // 尝试访问缓存的链接
+                checkUrlAvailability(cachedUrl, true);
                 return;
             }
             checkUrlsInOrder(0);
         };
 
+        // 检查单个链接的可用性
+        function checkUrlAvailability(url, isCached = false) {
+            statusEl.textContent = isCached ? "正在验证缓存链接..." : `正在检测链接...`;
+            statusEl.className = "status checking";
+
+            const controller = new AbortController();
+            const timeoutTimer = setTimeout(() => {
+                controller.abort();
+                if (isCached) {
+                    statusEl.textContent = "缓存链接超时，开始检测其他链接...";
+                    setTimeout(() => checkUrlsInOrder(0), 800);
+                } else {
+                    return false;
+                }
+            }, checkTimeout);
+
+            fetch(url, {
+                method: "HEAD",
+                signal: controller.signal,
+                mode: "no-cors",
+                cache: "no-store"
+            })
+            .then(() => {
+                clearTimeout(timeoutTimer);
+                statusEl.textContent = isCached ? "缓存链接可用，正在跳转..." : "链接可用，正在跳转...";
+                statusEl.className = "status success";
+                localStorage.setItem(cacheKey, url);
+                setTimeout(() => window.location.href = url, 1000);
+            })
+            .catch(() => {
+                clearTimeout(timeoutTimer);
+                if (isCached) {
+                    statusEl.textContent = "缓存链接不可用，开始检测其他链接...";
+                    setTimeout(() => checkUrlsInOrder(0), 800);
+                } else {
+                    return false;
+                }
+            });
+        }
+
+        // 按顺序检查所有链接
         function checkUrlsInOrder(index) {
             if (index >= targetUrls.length) {
                 gifEl.style.display = "none";
-                statusEl.textContent = "所有链接均无法访问，请稍后再试";
+                statusEl.textContent = "所有链接均无法访问，请稍后再试或手动选择链接";
                 statusEl.className = "status error";
                 return;
             }
@@ -101,29 +186,32 @@
             statusEl.textContent = `正在检测第${index + 1}个链接...`;
             statusEl.className = "status checking";
 
-            const img = new Image();
-            const timer = setTimeout(() => {
-                img.src = ""; // 停止加载
+            const controller = new AbortController();
+            const timeoutTimer = setTimeout(() => {
+                controller.abort();
                 statusEl.textContent = `第${index + 1}个链接超时，尝试下一个...`;
                 setTimeout(() => checkUrlsInOrder(index + 1), 800);
             }, checkTimeout);
 
-            img.onload = function () {
-                clearTimeout(timer);
+            fetch(currentUrl, {
+                method: "HEAD",
+                signal: controller.signal,
+                mode: "no-cors",
+                cache: "no-store"
+            })
+            .then(() => {
+                clearTimeout(timeoutTimer);
                 statusEl.textContent = `第${index + 1}个链接可用，正在跳转...`;
                 statusEl.className = "status success";
                 localStorage.setItem(cacheKey, currentUrl);
                 setTimeout(() => window.location.href = currentUrl, 1000);
-            };
-
-            img.onerror = function () {
-                clearTimeout(timer);
+            })
+            .catch(() => {
+                clearTimeout(timeoutTimer);
                 statusEl.textContent = `第${index + 1}个链接不可用，尝试下一个...`;
                 statusEl.className = "status error";
                 setTimeout(() => checkUrlsInOrder(index + 1), 800);
-            };
-
-            img.src = currentUrl + "?t=" + Date.now(); // 防止缓存
+            });
         }
     </script>
 </body>
